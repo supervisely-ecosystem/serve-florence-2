@@ -20,6 +20,13 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     MODELS = "src/models.json"
     APP_OPTIONS = f"{SERVE_PATH}/app_options.yaml"
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # disable GUI widgets
+        self.gui.set_project_meta = self.set_project_meta
+        self.gui.set_inference_settings = self.set_inference_settings
+
     def load_model(
         self, model_files: dict, model_info: dict, model_source: str, device: str, runtime: str
     ):
@@ -179,3 +186,11 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             "sliding_window_support": self.sliding_window_mode,
             "batch_inference_support": self.is_batch_inference_supported(),
         }
+
+    def set_project_meta(self, inference):
+        self.gui._model_classes_widget_container.hide()
+        return
+
+    def set_inference_settings(self, inference):
+        self.gui._model_inference_settings_container.hide()
+        return
