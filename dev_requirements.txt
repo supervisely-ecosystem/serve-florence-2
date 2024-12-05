@@ -5,3 +5,6 @@ transformers==4.46.2
 supervisely==6.73.249
 matplotlib
 ipywidgets
+timm
+flash_attn
+einops
