@@ -5,7 +5,7 @@ import numpy as np
 import supervisely as sly
 import torch
 import torchvision.transforms as T
-from huggingface_hub import snapshot_download
+from huggingface_hub import list_repo_tree, snapshot_download
 from PIL import Image
 from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType, Timer
 from supervisely.nn.inference.inference import get_hardware_info, get_name_from_env
@@ -115,8 +115,18 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         repo_id = model_files["checkpoint"]
         model_name = repo_id.split("/")[1]
         local_model_path = f"{self.model_dir}/{model_name}"
-        snapshot_download(repo_id=repo_id, local_dir=local_model_path)
-        return model_files
+        files_info = list_repo_tree(repo_id)
+        total_size = sum([file.size for file in files_info])
+        with self.gui._download_progress.__call__(
+            message=f"Downloading: '{model_name}'",
+            total=total_size,
+            unit="bytes",
+            unit_scale=True,
+        ) as download_pbar:
+            self.gui.download_progress.show()
+            snapshot_download(repo_id=repo_id, local_dir=local_model_path)
+            # TODO update widget
+        return {"checkpoint": local_model_path}
 
     def _load_model_headless(
         self,
@@ -165,6 +175,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         return {
             "app_name": get_name_from_env(default="Neural Network Serving"),
             "session_id": self.task_id,
+            "task type": "prompt-based object detection",
             "sliding_window_support": self.sliding_window_mode,
             "batch_inference_support": self.is_batch_inference_supported(),
         }
