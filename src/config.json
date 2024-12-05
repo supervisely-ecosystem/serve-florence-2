@@ -1,0 +1,22 @@
+{
+	"name": "Serve Florence 2",
+	"type": "app",
+	"version": "2.0.0",
+	"description": "Deploy Florence 2 as a REST API service",
+	"categories": ["neural network", "images", "object detection", "serve"],
+	"icon": "https://github.com/user-attachments/assets/...",
+	"icon_cover": true,
+	"poster": "https://github.com/user-attachments/assets/...",
+	"need_gpu": true,
+	"gpu": "preferred",
+	"session_tags": ["deployed_nn"],
+	"community_agent": false,
+	"docker_image": "supervisely/florence2:1.0.0",
+	"instance_version": "6.12.12",
+	"entrypoint": "python3 -m uvicorn main:model.app --host 0.0.0.0 --port 8000 --ws websockets --app-dir src",
+	"port": 8000,
+	"task_location": "application_sessions",
+	"license": {
+		"type": "MIT"
+	}	
+}
