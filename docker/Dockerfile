@@ -4,6 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && \
     apt install -y python3-pip git curl wget ffmpeg libgeos-dev libsm6 libxext6 libexiv2-dev libxrender-dev libboost-all-dev
 
+RUN pip3 install --upgrade pip
 COPY dev_requirements.txt dev_requirements.txt
 RUN pip3 install -r dev_requirements.txt
 
