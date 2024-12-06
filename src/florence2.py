@@ -8,7 +8,11 @@ import torchvision.transforms as T
 from huggingface_hub import list_repo_tree, snapshot_download
 from PIL import Image
 from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType, Timer
-from supervisely.nn.inference.inference import get_hardware_info, get_name_from_env
+from supervisely.nn.inference.inference import (
+    get_hardware_info,
+    get_name_from_env,
+    logger,
+)
 from supervisely.nn.prediction_dto import PredictionBBox
 from transformers import AutoModelForCausalLM, AutoProcessor
 
@@ -118,11 +122,12 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         return predictions
 
     def _download_pretrained_model(self, model_files: dict):
-        if not os.path.exists("weights"):
-            os.mkdir("weights")
+        cached_weights = os.listdir(self.weights_cache_dir)
+        logger.debug(f"Cached_weights: {cached_weights}")
         repo_id = model_files["checkpoint"]
         model_name = repo_id.split("/")[1]
         local_model_path = f"{self.weights_cache_dir}/{model_name}"
+        logger.debug(f"Downloading {repo_id} to {local_model_path}...")
         files_info = list_repo_tree(repo_id)
         total_size = sum([file.size for file in files_info])
         with self.gui._download_progress(
