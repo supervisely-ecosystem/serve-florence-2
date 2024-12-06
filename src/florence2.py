@@ -127,7 +127,9 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             logger.debug(f"Cached_weights: {cached_weights}")
         else:
             logger.debug(f'Directories in /app: {os.listdir("/app")}')
-            logger.debug(f"Directory {cached_weights} does not exist. Downloading weights...")
+            logger.debug(
+                f"Directory {self.weights_cache_dir} does not exist. Downloading weights..."
+            )
         repo_id = model_files["checkpoint"]
         model_name = repo_id.split("/")[1]
         local_model_path = f"{self.weights_cache_dir}/{model_name}"
