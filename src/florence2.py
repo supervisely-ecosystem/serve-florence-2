@@ -26,6 +26,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         # disable GUI widgets
         self.gui.set_project_meta = self.set_project_meta
         self.gui.set_inference_settings = self.set_inference_settings
+        self.weights_cache_dir = os.path.expanduser("~/.cache/supervisely/checkpoints")
 
     def load_model(
         self, model_files: dict, model_info: dict, model_source: str, device: str, runtime: str
@@ -121,10 +122,10 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             os.mkdir("weights")
         repo_id = model_files["checkpoint"]
         model_name = repo_id.split("/")[1]
-        local_model_path = f"{self.model_dir}/{model_name}"
+        local_model_path = f"{self.weights_cache_dir}/{model_name}"
         files_info = list_repo_tree(repo_id)
         total_size = sum([file.size for file in files_info])
-        with self.gui._download_progress.__call__(
+        with self.gui._download_progress(
             message=f"Downloading: '{model_name}'",
             total=total_size,
             unit="bytes",
