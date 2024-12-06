@@ -12,7 +12,7 @@ def download_models(model_files: dict, storage_dir: str):
         print(f"Creating storage directory {storage_dir}...")
         os.makedirs(storage_dir, exist_ok=True)
     for file in model_files:
-        repo_id = file["checkpoint"]
+        repo_id = file["meta"]["model_files"]["checkpoint"]
         model_name = repo_id.split("/")[1]
         print(f"Downloading {repo_id} to {local_model_path}...")
         local_model_path = f"{storage_dir}/{model_name}"
@@ -33,7 +33,7 @@ try:
     model_files = load_models("models.json")
     download_models(model_files, STORAGE_DIR)
 except Exception as e:
-    print("Something went wrong while downloading the models", e)
+    print("Something went wrong while downloading the models", repr(e))
 else:
     downloaded = os.listdir(STORAGE_DIR)
     print("Florence 2 models downloaded successfully:", downloaded)
