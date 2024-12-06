@@ -6,5 +6,4 @@ supervisely==6.73.249
 matplotlib
 ipywidgets
 timm
-flash_attn
 einops
