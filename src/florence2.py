@@ -122,8 +122,11 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         return predictions
 
     def _download_pretrained_model(self, model_files: dict):
-        cached_weights = os.listdir(self.weights_cache_dir)
-        logger.debug(f"Cached_weights: {cached_weights}")
+        if os.path.exists(self.weights_cache_dir):
+            cached_weights = os.listdir(self.weights_cache_dir)
+            logger.debug(f"Cached_weights: {cached_weights}")
+        else:
+            logger.debug(f"Directory {cached_weights} does not exist. Downloading weights...")
         repo_id = model_files["checkpoint"]
         model_name = repo_id.split("/")[1]
         local_model_path = f"{self.weights_cache_dir}/{model_name}"
