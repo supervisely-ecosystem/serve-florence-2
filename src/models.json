@@ -4,6 +4,7 @@
 		"Model Description": "Pretrained model with FLD-5B",
 		"Model Size": "0.23B",
 		"COCO Det. val2017 mAP": 34.7,
+		"Date": "2024-12-06",
 		"meta": {
 			"task_type": "prompt-based object detection",
 			"model_name": "Florence-2-base",
@@ -17,6 +18,7 @@
 		"Model Description": "Pretrained model with FLD-5B",
 		"Model Size": "0.77B",
 		"COCO Det. val2017 mAP": 37.5,
+		"Date": "2024-12-06",
 		"meta": {
 			"task_type": "prompt-based object detection",
 			"model_name": "Florence-2-large",
@@ -30,6 +32,7 @@
 		"Model Description": "Finetuned model on a collection of downstream tasks",
 		"Model size": "0.23B",
 		"COCO Det. val2017 mAP": 41.4,
+		"Date": "2024-12-06",
 		"meta": {
 			"task_type": "prompt-based object detection",
 			"model_name": "Florence-2-base-ft",
@@ -43,6 +46,7 @@
 		"Model Description": "Finetuned model on a collection of downstream tasks",
 		"Model size": "0.77B",
 		"COCO Det. val2017 mAP": 43.4,
+		"Date": "2024-12-06",
 		"meta": {
 			"task_type": "prompt-based object detection",
 			"model_name": "Florence-2-large-ft",
