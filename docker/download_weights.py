@@ -24,12 +24,11 @@ def load_models(json_file_path: str):
     return model_files
 
 
-if __name__ == "__main__":
-    try:
-        model_files = load_models("models.json")
-        download_models(model_files, STORAGE_DIR)
-    except Exception as e:
-        print("Something went wrong while downloading the models", e)
-    else:
-        downloaded = os.listdir(STORAGE_DIR)
-        print("Florence 2 models downloaded successfully:", downloaded)
+try:
+    model_files = load_models("models.json")
+    download_models(model_files, STORAGE_DIR)
+except Exception as e:
+    print("Something went wrong while downloading the models", e)
+else:
+    downloaded = os.listdir(STORAGE_DIR)
+    print("Florence 2 models downloaded successfully:", downloaded)
