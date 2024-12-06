@@ -12,8 +12,10 @@ def download_models(model_files: dict, storage_dir: str):
     for file in model_files:
         repo_id = file["checkpoint"]
         model_name = repo_id.split("/")[1]
+        print(f"Downloading {repo_id} to {local_model_path}...")
         local_model_path = f"{storage_dir}/{model_name}"
         snapshot_download(repo_id=repo_id, local_dir=local_model_path)
+        print(f"Downloaded {repo_id}")
 
 
 def load_models(json_file_path: str):
