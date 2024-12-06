@@ -14,6 +14,6 @@ ENV CUDA_HOME=/usr/local/cuda-12.1
 COPY download_weights.py /app/download_weights.py
 COPY models.json /app/models.json
 WORKDIR /app
-RUN python download_weights.py
+RUN python3 download_weights.py
 
 LABEL python_sdk_version=6.73.249
