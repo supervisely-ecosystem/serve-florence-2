@@ -9,7 +9,7 @@
 	"poster": "https://github.com/user-attachments/assets/...",
 	"need_gpu": true,
 	"gpu": "preferred",
-	"session_tags": ["deployed_nn"],
+	"session_tags": ["deployed_florence_2"],
 	"community_agent": false,
 	"docker_image": "supervisely/florence-2:1.0.1",
 	"instance_version": "6.12.12",
