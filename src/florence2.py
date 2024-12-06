@@ -26,7 +26,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         # disable GUI widgets
         self.gui.set_project_meta = self.set_project_meta
         self.gui.set_inference_settings = self.set_inference_settings
-        self.weights_cache_dir = os.path.expanduser("~/.cache/supervisely/checkpoints")
+        self.weights_cache_dir = "/app/.cache/supervisely/checkpoints"
 
     def load_model(
         self, model_files: dict, model_info: dict, model_source: str, device: str, runtime: str

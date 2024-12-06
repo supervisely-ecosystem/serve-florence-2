@@ -3,7 +3,7 @@ import os
 
 from huggingface_hub import snapshot_download
 
-STORAGE_DIR = os.path.expanduser("~/.cache/supervisely/checkpoints")
+STORAGE_DIR = "/app/.cache/supervisely/checkpoints"
 
 
 def download_models(model_files: dict, storage_dir: str):
