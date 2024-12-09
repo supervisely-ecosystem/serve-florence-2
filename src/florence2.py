@@ -30,7 +30,10 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         # disable GUI widgets
         self.gui.set_project_meta = self.set_project_meta
         self.gui.set_inference_settings = self.set_inference_settings
-        self.weights_cache_dir = "/root/.cache/supervisely/checkpoints"
+        # self.weights_cache_dir = "/root/.cache/supervisely/checkpoints"
+        self.weights_cache_dir = "/home/serpntns/Work/serve-florence-2/app_data/models"
+        self.task_prompt = "<CAPTION_TO_PHRASE_GROUNDING>"
+        self.torch_dtype = torch.float32
 
     def load_model(
         self, model_files: dict, model_info: dict, model_source: str, device: str, runtime: str
@@ -46,7 +49,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
                 model_source=model_source,
             )
 
-        h, w = 640, 640
+        h, w = 224, 224
         self.img_size = [w, h]
         self.transforms = T.Compose(
             [
@@ -57,9 +60,9 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
 
         if runtime == RuntimeType.PYTORCH:
             model_path = model_files["checkpoint"]
-            torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+            self.torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
             self.model = AutoModelForCausalLM.from_pretrained(
-                model_path, torch_dtype=torch_dtype, trust_remote_code=True
+                model_path, torch_dtype=self.torch_dtype, trust_remote_code=True
             ).eval()
             self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
             self.model = self.model.to(device)
@@ -74,15 +77,49 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     ) -> Tuple[List[List[PredictionBBox]], dict]:
         # 1. Preprocess
         with Timer() as preprocess_timer:
-            img_input, size_input, orig_target_sizes = self._prepare_input(images_np)
+            img_input, input_sizes, orig_sizes = self._prepare_input(images_np)
         # 2. Inference
         with Timer() as inference_timer:
-            outputs = self.model(img_input)
+            mapping = settings.get("mapping", {})
+            predictions_mapping = {}
+            for target_class, text in mapping.items():
+                if text is None:
+                    prompt = [self.task_prompt] * len(img_input)
+                else:
+                    prompt = [self.task_prompt + text] * len(img_input)
+                inputs = self.processor(text=prompt, images=img_input, return_tensors="pt").to(
+                    self.device, self.torch_dtype
+                )
+                generated_ids = self.model.generate(
+                    input_ids=inputs["input_ids"],
+                    pixel_values=inputs["pixel_values"],
+                    max_new_tokens=1024,
+                    early_stopping=False,
+                    do_sample=False,
+                    num_beams=3,
+                )
+                generated_texts = self.processor.batch_decode(
+                    generated_ids, skip_special_tokens=False
+                )
+                parsed_answers = [
+                    self.processor.post_process_generation(
+                        text, task=self.task_prompt, image_size=(img.shape[2], img.shape[1])  # W, H
+                    )
+                    for text, img in zip(generated_texts, img_input)
+                ]
+                predictions_mapping[target_class] = parsed_answers
+
+        # Restructure predictions
+        restructured_predictions = self._restructure_predictions(predictions_mapping)
+
         # 3. Postprocess
         with Timer() as postprocess_timer:
-            labels, boxes, scores = self.postprocessor(outputs, orig_target_sizes)
-            labels, boxes, scores = labels.cpu().numpy(), boxes.cpu().numpy(), scores.cpu().numpy()
-            predictions = self._format_predictions(labels, boxes, scores, settings)
+            # labels, boxes, scores = self.postprocessor(outputs, orig_target_sizes)
+            # labels, boxes, scores = labels.cpu().numpy(), boxes.cpu().numpy(), scores.cpu().numpy()
+            predictions = self._format_predictions(
+                restructured_predictions, input_sizes, orig_sizes, settings
+            )
+            print("next")
         benchmark = {
             "preprocess": preprocess_timer.get_time(),
             "inference": inference_timer.get_time(),
@@ -100,33 +137,56 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         return img_input.to(device), size_input.to(device), orig_sizes.to(device)
 
     def _format_prediction(
-        self, labels: np.ndarray, boxes: np.ndarray, scores: np.ndarray, conf_tresh: float
+        self, prediction: dict, class_name: str, i_size: Tuple[int, int], o_size: Tuple[int, int]
     ) -> List[PredictionBBox]:
-        predictions = []
-        for label, bbox_xyxy, score in zip(labels, boxes, scores):
-            if score < conf_tresh:
-                continue
-            class_name = self.classes[label]
-            bbox_xyxy = np.round(bbox_xyxy).astype(int)
-            bbox_xyxy = np.clip(bbox_xyxy, 0, None)
-            bbox_yxyx = [bbox_xyxy[1], bbox_xyxy[0], bbox_xyxy[3], bbox_xyxy[2]]
-            bbox_yxyx = list(map(int, bbox_yxyx))
-            predictions.append(PredictionBBox(class_name, bbox_yxyx, float(score)))
-        return predictions
+        scaled_bboxes = []
+        size_scaler = [o_size[0] / i_size[0], o_size[1] / i_size[1]]
+        bboxes = prediction[self.task_prompt]["bboxes"]
+        scaled_bboxes = []
+        for bbox in bboxes:
+            x1, y1, x2, y2 = bbox
+            x1, y1, x2, y2 = (
+                round(x1 * float(size_scaler[0])),
+                round(y1 * float(size_scaler[1])),
+                round(x2 * float(size_scaler[0])),
+                round(y2 * float(size_scaler[1])),
+            )
+            bbox_yxyx = [y1, x1, y2, x2]
+            pred_box = PredictionBBox(class_name, bbox_yxyx, None)
+            scaled_bboxes.append(pred_box)
+        return scaled_bboxes
 
     def _format_predictions(
-        self, labels: np.ndarray, boxes: np.ndarray, scores: np.ndarray, settings: dict
+        self, predictions_mapping: dict, input_sizes: List, orig_sizes: List, settings: dict
     ) -> List[List[PredictionBBox]]:
-        thres = settings["confidence_threshold"]
-        predictions = [self._format_prediction(*args, thres) for args in zip(labels, boxes, scores)]
-        return predictions
+        postprocessed_preds = []
+        # for class_name, predictions in predictions_mapping.items():
+        for image, i_size, o_size in zip(predictions_mapping, input_sizes, orig_sizes):
+            img_predictions = []
+            for class_name, prediction in predictions_mapping[image].items():
+                scaled_bboxes = self._format_prediction(prediction, class_name, i_size, o_size)
+                img_predictions.extend(scaled_bboxes)
+            postprocessed_preds.append(img_predictions)
+        return postprocessed_preds
+
+    def _restructure_predictions(self, predictions_mapping: dict) -> dict:
+        restructured = {}
+        keys = list(predictions_mapping.keys())
+        num_items = len(predictions_mapping[keys[0]])
+
+        for i in range(num_items):
+            restructured[str(i + 1)] = {
+                class_name: predictions[i]
+                for class_name, predictions in predictions_mapping.items()
+            }
+
+        return restructured
 
     def _download_pretrained_model(self, model_files: dict):
         if os.path.exists(self.weights_cache_dir):
             cached_weights = os.listdir(self.weights_cache_dir)
             logger.debug(f"Cached_weights: {cached_weights}")
         else:
-            logger.debug(f'Directories in /app: {os.listdir("/app")}')
             logger.debug(
                 f"Directory {self.weights_cache_dir} does not exist. Downloading weights..."
             )
@@ -189,6 +249,20 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         if self.gui is not None:
             self.update_gui(self._model_served)
             self.gui.show_deployed_model_info(self)
+
+    def _create_label(self, dto: PredictionBBox):
+        class_name = dto.class_name + "_bbox"
+        obj_class = self.model_meta.get_obj_class(class_name)
+        if obj_class is None:
+            self._model_meta = self.model_meta.add_obj_class(
+                sly.ObjClass(class_name, sly.Rectangle)
+            )
+        geometry = sly.Rectangle(*dto.bbox_tlbr)
+        tags = []
+        if dto.score is not None:
+            tags.append(sly.Tag(self._get_confidence_tag_meta(), dto.score))
+        label = sly.Label(geometry, obj_class, tags)
+        return label
 
     def get_info(self) -> Dict[str, Any]:
         return {
