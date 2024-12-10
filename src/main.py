@@ -1,8 +1,9 @@
 import os
-from dotenv import load_dotenv
-import supervisely as sly
-from src.florence2 import Florence2
 
+import supervisely as sly
+from dotenv import load_dotenv
+
+from src.florence2 import Florence2
 
 if sly.is_development():
     load_dotenv("local.env")
