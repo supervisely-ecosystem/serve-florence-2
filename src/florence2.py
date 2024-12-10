@@ -51,12 +51,6 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
 
         h, w = 224, 224
         self.img_size = [w, h]
-        self.transforms = T.Compose(
-            [
-                T.Resize((h, w)),
-                T.ToTensor(),
-            ]
-        )
 
         if runtime == RuntimeType.PYTORCH:
             model_path = model_files["checkpoint"]
@@ -67,80 +61,60 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
             self.model = self.model.to(device)
 
-    def predict_benchmark(self, images_np: List[np.ndarray], settings: dict = None):
+    def predict(self, image_path: np.ndarray, settings: dict = None):
         if self.runtime == RuntimeType.PYTORCH:
-            return self._predict_pytorch(images_np, settings)
+            return self._predict_pytorch(image_path, settings)
 
     @torch.no_grad()
-    def _predict_pytorch(
-        self, images_np: List[np.ndarray], settings: dict = None
-    ) -> Tuple[List[List[PredictionBBox]], dict]:
+    def _predict_pytorch(self, image_path: str, settings: dict = None) -> List[PredictionBBox]:
         # 1. Preprocess
-        with Timer() as preprocess_timer:
-            img_input, input_sizes, orig_sizes = self._prepare_input(images_np)
+        img_input, size_scaler = self._prepare_input(image_path)
         # 2. Inference
-        with Timer() as inference_timer:
-            mapping = settings.get("mapping", {})
-            predictions_mapping = {}
-            for target_class, text in mapping.items():
-                if text is None:
-                    prompt = [self.task_prompt] * len(img_input)
-                else:
-                    prompt = [self.task_prompt + text] * len(img_input)
-                inputs = self.processor(text=prompt, images=img_input, return_tensors="pt").to(
-                    self.device, self.torch_dtype
-                )
-                generated_ids = self.model.generate(
-                    input_ids=inputs["input_ids"],
-                    pixel_values=inputs["pixel_values"],
-                    max_new_tokens=1024,
-                    early_stopping=False,
-                    do_sample=False,
-                    num_beams=3,
-                )
-                generated_texts = self.processor.batch_decode(
-                    generated_ids, skip_special_tokens=False
-                )
-                parsed_answers = [
-                    self.processor.post_process_generation(
-                        text, task=self.task_prompt, image_size=(img.shape[2], img.shape[1])  # W, H
-                    )
-                    for text, img in zip(generated_texts, img_input)
-                ]
-                predictions_mapping[target_class] = parsed_answers
-
-        # Restructure predictions
-        restructured_predictions = self._restructure_predictions(predictions_mapping)
+        mapping = settings.get("mapping", {})
+        predictions_mapping = {}
+        for target_class, text in mapping.items():
+            if text is None:
+                prompt = self.task_prompt
+            else:
+                prompt = self.task_prompt + text
+            inputs = self.processor(text=prompt, images=img_input, return_tensors="pt").to(
+                self.device, self.torch_dtype
+            )
+            generated_ids = self.model.generate(
+                input_ids=inputs["input_ids"],
+                pixel_values=inputs["pixel_values"],
+                max_new_tokens=1024,
+                early_stopping=False,
+                do_sample=False,
+                num_beams=3,
+            )
+            generated_texts = self.processor.batch_decode(generated_ids, skip_special_tokens=False)
+            parsed_answer = self.processor.post_process_generation(
+                generated_texts[0],
+                task=self.task_prompt,
+                image_size=(img_input.width, img_input.height),  # W, H
+            )
+            predictions_mapping.update({target_class: parsed_answer})
 
         # 3. Postprocess
-        with Timer() as postprocess_timer:
-            # labels, boxes, scores = self.postprocessor(outputs, orig_target_sizes)
-            # labels, boxes, scores = labels.cpu().numpy(), boxes.cpu().numpy(), scores.cpu().numpy()
-            predictions = self._format_predictions(
-                restructured_predictions, input_sizes, orig_sizes, settings
-            )
-            print("next")
-        benchmark = {
-            "preprocess": preprocess_timer.get_time(),
-            "inference": inference_timer.get_time(),
-            "postprocess": postprocess_timer.get_time(),
-        }
-        return predictions, benchmark
+        predictions = self._format_predictions(predictions_mapping, size_scaler)
 
-    def _prepare_input(self, images_np: List[np.ndarray], device=None):
-        if device is None:
-            device = self.device
-        imgs_pil = [Image.fromarray(img) for img in images_np]
-        orig_sizes = torch.as_tensor([img.size for img in imgs_pil])
-        img_input = torch.stack([self.transforms(img) for img in imgs_pil])
-        size_input = torch.tensor([self.img_size * len(images_np)]).reshape(-1, 2)
-        return img_input.to(device), size_input.to(device), orig_sizes.to(device)
+        return predictions
+
+    def _prepare_input(self, image_path: str, device=None):
+        image = Image.open(image_path)
+        new_size = self._get_resized_dimensions(image.size)
+        size_scaler = (image.width / new_size[0], image.height / new_size[1])
+        image_resized = image.resize(new_size)
+        return image_resized, size_scaler
 
     def _format_prediction(
-        self, prediction: dict, class_name: str, i_size: Tuple[int, int], o_size: Tuple[int, int]
+        self,
+        prediction: dict,
+        class_name: str,
+        size_scaler: Tuple[int, int],
     ) -> List[PredictionBBox]:
         scaled_bboxes = []
-        size_scaler = [o_size[0] / i_size[0], o_size[1] / i_size[1]]
         bboxes = prediction[self.task_prompt]["bboxes"]
         scaled_bboxes = []
         for bbox in bboxes:
@@ -157,30 +131,13 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         return scaled_bboxes
 
     def _format_predictions(
-        self, predictions_mapping: dict, input_sizes: List, orig_sizes: List, settings: dict
+        self, predictions_mapping: dict, size_scaler: List
     ) -> List[List[PredictionBBox]]:
         postprocessed_preds = []
-        # for class_name, predictions in predictions_mapping.items():
-        for image, i_size, o_size in zip(predictions_mapping, input_sizes, orig_sizes):
-            img_predictions = []
-            for class_name, prediction in predictions_mapping[image].items():
-                scaled_bboxes = self._format_prediction(prediction, class_name, i_size, o_size)
-                img_predictions.extend(scaled_bboxes)
-            postprocessed_preds.append(img_predictions)
+        for class_name, prediction in predictions_mapping.items():
+            scaled_bboxes = self._format_prediction(prediction, class_name, size_scaler)
+            postprocessed_preds.extend(scaled_bboxes)
         return postprocessed_preds
-
-    def _restructure_predictions(self, predictions_mapping: dict) -> dict:
-        restructured = {}
-        keys = list(predictions_mapping.keys())
-        num_items = len(predictions_mapping[keys[0]])
-
-        for i in range(num_items):
-            restructured[str(i + 1)] = {
-                class_name: predictions[i]
-                for class_name, predictions in predictions_mapping.items()
-            }
-
-        return restructured
 
     def _download_pretrained_model(self, model_files: dict):
         if os.path.exists(self.weights_cache_dir):
@@ -280,3 +237,14 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     def set_inference_settings(self, inference):
         self.gui._model_inference_settings_container.hide()
         return
+
+    def _get_resized_dimensions(self, orig_size: Tuple[int, int]) -> Tuple[int, int]:
+        max_size = max(self.img_size[0], self.img_size[1])
+        width, height = orig_size
+        if width > height:
+            new_width = max_size
+            new_height = int(max_size * height / width)
+        else:
+            new_height = max_size
+            new_width = int(max_size * width / height)
+        return (new_width, new_height)
