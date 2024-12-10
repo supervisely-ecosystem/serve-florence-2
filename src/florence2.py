@@ -7,7 +7,7 @@ import torch
 import torchvision.transforms as T
 from huggingface_hub import list_repo_tree, snapshot_download
 from PIL import Image
-from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType, Timer
+from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType
 from supervisely.nn.inference.inference import (
     get_hardware_info,
     get_name_from_env,
@@ -16,13 +16,11 @@ from supervisely.nn.inference.inference import (
 from supervisely.nn.prediction_dto import PredictionBBox
 from transformers import AutoModelForCausalLM, AutoProcessor
 
-SERVE_PATH = "src"
-
 
 class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     FRAMEWORK_NAME = "Florence 2"
     MODELS = "src/models.json"
-    APP_OPTIONS = f"{SERVE_PATH}/app_options.yaml"
+    APP_OPTIONS = "src/app_options.yaml"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -30,9 +28,8 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         # disable GUI widgets
         self.gui.set_project_meta = self.set_project_meta
         self.gui.set_inference_settings = self.set_inference_settings
-        # self.weights_cache_dir = "/root/.cache/supervisely/checkpoints"
-        self.weights_cache_dir = "/home/serpntns/Work/serve-florence-2/app_data/models"
-        self.task_prompt = "<CAPTION_TO_PHRASE_GROUNDING>"
+        self.weights_cache_dir = self._checkpoints_cache_dir()
+        self.default_task_prompt = "<CAPTION_TO_PHRASE_GROUNDING>"
         self.torch_dtype = torch.float32
 
     def load_model(
@@ -68,6 +65,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     @torch.no_grad()
     def _predict_pytorch(self, image_path: str, settings: dict = None) -> List[PredictionBBox]:
         # 1. Preprocess
+        self.task_prompt = settings.get("task_prompt", self.default_task_prompt)
         img_input, size_scaler = self._prepare_input(image_path)
         # 2. Inference
         mapping = settings.get("mapping", {})
@@ -140,6 +138,10 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         return postprocessed_preds
 
     def _download_pretrained_model(self, model_files: dict):
+        """
+        Diff to :class:`Inference`:
+           - The model is downloaded from the Hugging Face
+        """
         if os.path.exists(self.weights_cache_dir):
             cached_weights = os.listdir(self.weights_cache_dir)
             logger.debug(f"Cached_weights: {cached_weights}")
@@ -207,7 +209,12 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             self.update_gui(self._model_served)
             self.gui.show_deployed_model_info(self)
 
-    def _create_label(self, dto: PredictionBBox):
+    def _create_label(self, dto: PredictionBBox) -> sly.Label:
+        """
+        Create a label from the prediction DTO.
+        Diff to :class:`ObjectDetection`:
+              - class_name is appended with "_bbox" to match the class name in the project
+        """
         class_name = dto.class_name + "_bbox"
         obj_class = self.model_meta.get_obj_class(class_name)
         if obj_class is None:
@@ -231,14 +238,24 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         }
 
     def set_project_meta(self, inference):
+        """The model does not have predefined classes.
+        In case of prompt-based models, the classes are defined by the user."""
         self.gui._model_classes_widget_container.hide()
         return
 
     def set_inference_settings(self, inference):
+        """The model does not have predefined inference settings.
+        In case of prompt-based models, the settings are defined by the user."""
         self.gui._model_inference_settings_container.hide()
         return
 
     def _get_resized_dimensions(self, orig_size: Tuple[int, int]) -> Tuple[int, int]:
+        """
+        Resize image to the maximum size of 224x224 to optimize memoru usage
+        while preserving the aspect ratio.
+        If one of the dimensions will be less than 24 after resizing, it will be set to 24.
+        So the other dimension will be adjusted accordingly and might be bigger than 224, but this is fine.
+        """
         max_size = max(self.img_size[0], self.img_size[1])
         width, height = orig_size
         if width > height:
@@ -247,4 +264,10 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         else:
             new_height = max_size
             new_width = int(max_size * width / height)
+        if new_width < 24:
+            new_width = 24
+            new_height = int(24 * height / width)
+        if new_height < 24:
+            new_height = 24
+            new_width = int(24 * width / height)
         return (new_width, new_height)
