@@ -14,5 +14,5 @@ model = Florence2(
     use_serving_gui_template=True,
     sliding_window_mode="none",
 )
-model.serve()
 model.gui.pretrained_models_table.set_active_row(1)
+model.serve()
