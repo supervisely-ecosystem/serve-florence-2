@@ -67,8 +67,47 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         # 1. Preprocess
         self.task_prompt = settings.get("task_prompt", self.default_task_prompt)
         img_input, size_scaler = self._prepare_input(image_path)
-        # 2. Inference
-        mapping = settings.get("mapping", {})
+        mapping = settings.get("mapping")
+        text = settings.get("text")
+
+        # 2. Inference Classes Mapping
+        if mapping is not None and text is None:
+            predictions_mapping = self._classes_mapping_inference(img_input, mapping)
+            # 3. Postprocess
+            predictions = self._format_predictions_cm(predictions_mapping, size_scaler)
+        elif mapping is None and text is not None:
+            predictions_mapping = self._common_prompt_inference(img_input, text)
+            # 3. Postprocess
+            predictions = self._format_predictions_cp(predictions_mapping, size_scaler)
+        else:
+            raise ValueError("Either 'mapping' or 'text' should be provided")
+
+        return predictions
+
+    def _common_prompt_inference(self, img_input: Image.Image, text: str):
+        if text == "":
+            text = self._get_detailed_caption_text(img_input)
+        prompt = self.task_prompt + text
+        inputs = self.processor(text=prompt, images=img_input, return_tensors="pt").to(
+            self.device, self.torch_dtype
+        )
+        generated_ids = self.model.generate(
+            input_ids=inputs["input_ids"],
+            pixel_values=inputs["pixel_values"],
+            max_new_tokens=1024,
+            early_stopping=False,
+            do_sample=False,
+            num_beams=3,
+        )
+        generated_texts = self.processor.batch_decode(generated_ids, skip_special_tokens=False)
+        parsed_answer = self.processor.post_process_generation(
+            generated_texts[0],
+            task=self.task_prompt,
+            image_size=(img_input.width, img_input.height),  # W, H
+        )
+        return parsed_answer
+
+    def _classes_mapping_inference(self, img_input: Image.Image, mapping: dict):
         predictions_mapping = {}
         for target_class, text in mapping.items():
             if text is None:
@@ -93,11 +132,26 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
                 image_size=(img_input.width, img_input.height),  # W, H
             )
             predictions_mapping.update({target_class: parsed_answer})
+        return predictions_mapping
 
-        # 3. Postprocess
-        predictions = self._format_predictions(predictions_mapping, size_scaler)
-
-        return predictions
+    def _get_detailed_caption_text(self, img_input: Image.Image) -> str:
+        task_prompt = "<DETAILED_CAPTION>"
+        inputs = self.processor(text=task_prompt, images=img_input, return_tensors="pt").to(
+            self.device, self.torch_dtype
+        )
+        generated_ids = self.model.generate(
+            input_ids=inputs["input_ids"],
+            pixel_values=inputs["pixel_values"],
+            max_new_tokens=1024,
+            early_stopping=False,
+            do_sample=False,
+            num_beams=3,
+        )
+        generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+        parsed_answer = self.processor.post_process_generation(
+            generated_text, task=task_prompt, image_size=(img_input.width, img_input.height)
+        )
+        return parsed_answer
 
     def _prepare_input(self, image_path: str, device=None):
         image = Image.open(image_path)
@@ -128,13 +182,34 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             scaled_bboxes.append(pred_box)
         return scaled_bboxes
 
-    def _format_predictions(
+    def _format_predictions_cm(
         self, predictions_mapping: dict, size_scaler: List
     ) -> List[List[PredictionBBox]]:
+        """For classes mapping"""
         postprocessed_preds = []
         for class_name, prediction in predictions_mapping.items():
             scaled_bboxes = self._format_prediction(prediction, class_name, size_scaler)
             postprocessed_preds.extend(scaled_bboxes)
+        return postprocessed_preds
+
+    def _format_predictions_cp(
+        self, predictions: dict, size_scaler: List
+    ) -> List[List[PredictionBBox]]:
+        """For common prompt"""
+        postprocessed_preds = []
+        bboxes = predictions[self.task_prompt]["bboxes"]
+        class_names = predictions[self.task_prompt]["labels"]
+        for class_name, bbox in zip(class_names, bboxes):
+            x1, y1, x2, y2 = bbox
+            x1, y1, x2, y2 = (
+                round(x1 * float(size_scaler[0])),
+                round(y1 * float(size_scaler[1])),
+                round(x2 * float(size_scaler[0])),
+                round(y2 * float(size_scaler[1])),
+            )
+            bbox_yxyx = [y1, x1, y2, x2]
+            pred_box = PredictionBBox(class_name, bbox_yxyx, None)
+            postprocessed_preds.extend(pred_box)
         return postprocessed_preds
 
     def _download_pretrained_model(self, model_files: dict):
