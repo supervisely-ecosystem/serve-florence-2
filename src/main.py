@@ -15,3 +15,4 @@ model = Florence2(
     sliding_window_mode="none",
 )
 model.serve()
+model.gui.pretrained_models_table.set_active_row(1)

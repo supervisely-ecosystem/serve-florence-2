@@ -209,7 +209,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             )
             bbox_yxyx = [y1, x1, y2, x2]
             pred_box = PredictionBBox(class_name, bbox_yxyx, None)
-            postprocessed_preds.extend(pred_box)
+            postprocessed_preds.append(pred_box)
         return postprocessed_preds
 
     def _download_pretrained_model(self, model_files: dict):
