@@ -8,7 +8,7 @@
 	"icon_cover": true,
 	"poster": "https://github.com/user-attachments/assets/54112ea8-8ae3-42fa-906c-2ba53f552884",
 	"gpu": "required",
-	"session_tags": ["deployed_florence_2, sly_smart_annotation"],
+	"session_tags": ["deployed_florence_2", "sly_smart_annotation"],
 	"community_agent": false,
 	"docker_image": "supervisely/florence-2:1.0.1",
 	"instance_version": "6.12.12",
