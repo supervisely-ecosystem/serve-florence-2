@@ -39,7 +39,7 @@ Florence-2 serves as a versatile tool capable of performing tasks such as image 
 
 # How To Run
 
-**Step 1** Select pretrained model architecture and press the **Serve** button.
+**Step 1** Select pretrained model architecture and press the `Serve` button.
 
 ![serve](https://github.com/user-attachments/assets/b59dfbb3-3c2c-47dd-b920-147cf584c214)
 
