@@ -300,6 +300,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             self._model_meta = self.model_meta.add_obj_class(
                 sly.ObjClass(class_name, sly.Rectangle)
             )
+            obj_class = self.model_meta.get_obj_class(class_name)
         geometry = sly.Rectangle(*dto.bbox_tlbr)
         tags = []
         if dto.score is not None:
