@@ -22,6 +22,7 @@ Application key points:
 
 -   Deploy on GPU
 -   Select one of 4 pretrained models
+-   Automatic deployment of the `Florence-2-large` model
 -   As initial version only uses the **Caption to Phrase Grounding** task prompt to detect objects.
 
 Florence-2 is a foundation model designed for multimodal vision tasks, enabling unified handling of image analysis and text interaction. It employs a seq2seq transformer architecture to handle diverse tasks such as object detection, segmentation, image captioning and visual grounding. The model introduces a unified approach to vision-language tasks, where textual prompts guide the model to produce task-specific output.
