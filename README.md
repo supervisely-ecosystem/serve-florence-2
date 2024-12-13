@@ -1,5 +1,5 @@
 <div align="center" markdown>
-<img src="https://github.com/user-attachments/assets/54112ea8-8ae3-42fa-906c-2ba53f552884"/>
+<img src="https://github.com/user-attachments/assets/79b71648-f78e-4ae3-be3f-508e385fc0b4"/>
 
 # Serve Florence-2
 
