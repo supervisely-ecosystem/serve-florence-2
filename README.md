@@ -18,13 +18,15 @@
 
 # Overview
 
-Florence is a foundation model designed for multimodal vision tasks, enabling unified handling of image analysis and text interaction. It employs a seq2seq transformer architecture to handle diverse tasks such as object detection, segmentation, image captioning, and visual grounding. The model introduces a unified approach to vision-language tasks, where textual prompts guide the model to produce task-specific output.
+Florence is a foundation model designed for multimodal vision tasks, enabling unified handling of image analysis and text interaction. It employs a seq2seq transformer architecture to handle diverse tasks such as object detection, segmentation, image captioning and visual grounding. The model introduces a unified approach to vision-language tasks, where textual prompts guide the model to produce task-specific output.
+
+⚠️ Currently, our **Serve** application only uses the **Caption to Phrase Grounding** task prompt.
 
 Florence processes visual data using a vision encoder that converts images into token embeddings. These embeddings are combined with textual prompts and passed through a multimodal encoder-decoder to generate outputs.
 
 ![operating principle 1](https://github.com/user-attachments/assets/ec79e92c-4699-41a2-babb-177877e768f2)
 
-The model is trained on FLD-900M, a large dataset of over 900 million image-text pairs with detailed annotations for global, regional, and pixel-level tasks. 
+The model is trained on FLD-900M, a large dataset of over 900 million image-text pairs with detailed annotations for global, regional and pixel-level tasks. 
 
 Florence serves as a versatile tool capable of performing tasks such as image captioning, object detection, and segmentation through a single, unified architecture.
 
