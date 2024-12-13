@@ -66,7 +66,10 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     def _predict_pytorch(self, image_path: str, settings: dict = None) -> List[PredictionBBox]:
         # 1. Preprocess
         self.task_prompt = settings.get("task_prompt", self.default_task_prompt)
-        img_input, size_scaler = self._prepare_input(image_path)
+        size_scaler = None
+        img_input = Image.open(image_path)
+        # TODO uncomment next line if you need to resize the image to optimize memory usage
+        # img_input, size_scaler = self._prepare_input(image_path)
         mapping = settings.get("mapping")
         text = settings.get("text")
 
@@ -156,7 +159,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         logger.info(f"Got detailed caption: {detailed_caption_text}")
         return detailed_caption_text
 
-    def _prepare_input(self, image_path: str, device=None):
+    def _prepare_input(self, image_path: str):
         image = Image.open(image_path)
         new_size = self._get_resized_dimensions(image.size)
         size_scaler = (image.width / new_size[0], image.height / new_size[1])
@@ -167,19 +170,22 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         self,
         prediction: dict,
         class_name: str,
-        size_scaler: Tuple[int, int],
+        size_scaler: Tuple[int, int] = None,
     ) -> List[PredictionBBox]:
         scaled_bboxes = []
         bboxes = prediction[self.task_prompt]["bboxes"]
         scaled_bboxes = []
         for bbox in bboxes:
             x1, y1, x2, y2 = bbox
-            x1, y1, x2, y2 = (
-                round(x1 * float(size_scaler[0])),
-                round(y1 * float(size_scaler[1])),
-                round(x2 * float(size_scaler[0])),
-                round(y2 * float(size_scaler[1])),
-            )
+            if size_scaler is not None:
+                x1, y1, x2, y2 = (
+                    round(x1 * float(size_scaler[0])),
+                    round(y1 * float(size_scaler[1])),
+                    round(x2 * float(size_scaler[0])),
+                    round(y2 * float(size_scaler[1])),
+                )
+            else:
+                x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
             bbox_yxyx = [y1, x1, y2, x2]
             pred_box = PredictionBBox(class_name, bbox_yxyx, None)
             scaled_bboxes.append(pred_box)
