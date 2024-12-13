@@ -5,8 +5,7 @@
   
 <p align="center">
   <a href="#Overview">Overview</a> •
-  <a href="#How-to-Run">How to Run</a> •
-  <a href="#Model-application-examples">Model application examples</a> 
+  <a href="#How-to-Run">How to Run</a>
 </p>
 
 [![](https://img.shields.io/badge/supervisely-ecosystem-brightgreen)](https://ecosystem.supervise.ly/apps/supervisely-ecosystem/serve-florence-2)
@@ -41,4 +40,3 @@ Florence serves as a versatile tool capable of performing tasks such as image ca
 
 ![deployed](https://github.com/user-attachments/assets/f9c20b41-40ea-4aeb-8e0d-e510c2f24bc5)
 
-# Model application examples
