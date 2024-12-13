@@ -135,6 +135,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         return predictions_mapping
 
     def _get_detailed_caption_text(self, img_input: Image.Image) -> str:
+        logger.info("Text prompt is empty. Getting detailed caption for the image...")
         task_prompt = "<DETAILED_CAPTION>"
         inputs = self.processor(text=task_prompt, images=img_input, return_tensors="pt").to(
             self.device, self.torch_dtype
@@ -151,7 +152,9 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         parsed_answer = self.processor.post_process_generation(
             generated_text, task=task_prompt, image_size=(img_input.width, img_input.height)
         )
-        return parsed_answer
+        detailed_caption_text = parsed_answer[task_prompt]
+        logger.info(f"Got detailed caption: {detailed_caption_text}")
+        return detailed_caption_text
 
     def _prepare_input(self, image_path: str, device=None):
         image = Image.open(image_path)
