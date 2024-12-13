@@ -202,7 +202,9 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         return postprocessed_preds
 
     def _format_predictions_cp(
-        self, predictions: dict, size_scaler: List
+        self,
+        predictions: dict,
+        size_scaler: Tuple[int, int] = None,
     ) -> List[List[PredictionBBox]]:
         """For common prompt"""
         postprocessed_preds = []
@@ -210,12 +212,15 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         class_names = predictions[self.task_prompt]["labels"]
         for class_name, bbox in zip(class_names, bboxes):
             x1, y1, x2, y2 = bbox
-            x1, y1, x2, y2 = (
-                round(x1 * float(size_scaler[0])),
-                round(y1 * float(size_scaler[1])),
-                round(x2 * float(size_scaler[0])),
-                round(y2 * float(size_scaler[1])),
-            )
+            if size_scaler is not None:
+                x1, y1, x2, y2 = (
+                    round(x1 * float(size_scaler[0])),
+                    round(y1 * float(size_scaler[1])),
+                    round(x2 * float(size_scaler[0])),
+                    round(y2 * float(size_scaler[1])),
+                )
+            else:
+                x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
             bbox_yxyx = [y1, x1, y2, x2]
             pred_box = PredictionBBox(class_name, bbox_yxyx, None)
             postprocessed_preds.append(pred_box)
