@@ -5,7 +5,8 @@
 
 <p align="center">
   <a href="#Overview">Overview</a> •
-  <a href="#How-to-Run">How to Run</a>
+  <a href="#How-to-Run">How to Run</a> •
+  <a href="#Acknowledgment">Acknowledgment</a>
 </p>
 
 [![](https://img.shields.io/badge/supervisely-ecosystem-brightgreen)](https://ecosystem.supervise.ly/apps/supervisely-ecosystem/serve-florence-2)
@@ -46,3 +47,7 @@ Florence-2 serves as a versatile tool capable of performing tasks such as image 
 **Step 2.** Wait for the model to deploy.
 
 ![deployed](https://github.com/user-attachments/assets/f9c20b41-40ea-4aeb-8e0d-e510c2f24bc5)
+
+# Acknowledgment
+
+This app is based on the great work [Florence 2](https://huggingface.co/microsoft/Florence-2-base).

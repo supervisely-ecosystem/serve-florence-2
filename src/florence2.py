@@ -21,19 +21,24 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     FRAMEWORK_NAME = "Florence 2"
     MODELS = "src/models.json"
     APP_OPTIONS = "src/app_options.yaml"
+    INFERENCE_SETTINGS = "src/inference_settings.yaml"
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         # disable GUI widgets
         self.gui.set_project_meta = self.set_project_meta
-        self.gui.set_inference_settings = self.set_inference_settings
         self.weights_cache_dir = self._checkpoints_cache_dir()
         self.default_task_prompt = "<CAPTION_TO_PHRASE_GROUNDING>"
         self.torch_dtype = torch.float32
 
     def load_model(
-        self, model_files: dict, model_info: dict, model_source: str, device: str, runtime: str
+        self,
+        model_files: dict,
+        model_info: dict,
+        model_source: str,
+        device: str,
+        runtime: str,
     ):
         checkpoint_path = model_files["checkpoint"]
         if model_source == ModelSource.PRETRAINED:
@@ -51,11 +56,15 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
 
         if runtime == RuntimeType.PYTORCH:
             model_path = model_files["checkpoint"]
-            self.torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+            self.torch_dtype = (
+                torch.float16 if torch.cuda.is_available() else torch.float32
+            )
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_path, torch_dtype=self.torch_dtype, trust_remote_code=True
             ).eval()
-            self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
+            self.processor = AutoProcessor.from_pretrained(
+                model_path, trust_remote_code=True
+            )
             self.model = self.model.to(device)
 
     def predict(self, image_path: np.ndarray, settings: dict = None):
@@ -63,7 +72,9 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             return self._predict_pytorch(image_path, settings)
 
     @torch.no_grad()
-    def _predict_pytorch(self, image_path: str, settings: dict = None) -> List[PredictionBBox]:
+    def _predict_pytorch(
+        self, image_path: str, settings: dict = None
+    ) -> List[PredictionBBox]:
         # 1. Preprocess
         self.task_prompt = settings.get("task_prompt", self.default_task_prompt)
         size_scaler = None
@@ -87,6 +98,46 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
 
         return predictions
 
+    def predict_batch(self, images_np, settings):
+        self.task_prompt = settings.get("task_prompt", self.default_task_prompt)
+        text = settings.get("text", "find all objects")
+        batch_size = settings.get("batch_size", 2)
+
+        images = [Image.fromarray(img) for img in images_np]
+        images_batched = [
+            images[i : i + batch_size] for i in range(0, len(images), batch_size)
+        ]
+
+        total_predictions = []
+        for images_batch in images_batched:
+            prompt = [self.task_prompt + text] * len(images_batch)
+            inputs = self.processor(
+                text=prompt, images=images_batch, return_tensors="pt"
+            ).to(self.device, self.torch_dtype)
+            generated_ids = self.model.generate(
+                input_ids=inputs["input_ids"],
+                pixel_values=inputs["pixel_values"],
+                max_new_tokens=1024,
+                early_stopping=False,
+                do_sample=False,
+                num_beams=3,
+            )
+            generated_texts = self.processor.batch_decode(
+                generated_ids, skip_special_tokens=False
+            )
+            parsed_answers = [
+                self.processor.post_process_generation(
+                    text, task=self.task_prompt, image_size=(img.width, img.height)
+                )
+                for text, img in zip(generated_texts, images_batch)
+            ]
+            batch_predictions = []
+            for answer in parsed_answers:
+                predictions = self._format_predictions_cp(answer, size_scaler=None)
+                batch_predictions.append(predictions)
+            total_predictions.extend(batch_predictions)
+        return total_predictions
+
     def _common_prompt_inference(self, img_input: Image.Image, text: str):
         if text == "":
             text = self._get_detailed_caption_text(img_input)
@@ -102,7 +153,9 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             do_sample=False,
             num_beams=3,
         )
-        generated_texts = self.processor.batch_decode(generated_ids, skip_special_tokens=False)
+        generated_texts = self.processor.batch_decode(
+            generated_ids, skip_special_tokens=False
+        )
         parsed_answer = self.processor.post_process_generation(
             generated_texts[0],
             task=self.task_prompt,
@@ -117,9 +170,9 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
                 prompt = self.task_prompt
             else:
                 prompt = self.task_prompt + text
-            inputs = self.processor(text=prompt, images=img_input, return_tensors="pt").to(
-                self.device, self.torch_dtype
-            )
+            inputs = self.processor(
+                text=prompt, images=img_input, return_tensors="pt"
+            ).to(self.device, self.torch_dtype)
             generated_ids = self.model.generate(
                 input_ids=inputs["input_ids"],
                 pixel_values=inputs["pixel_values"],
@@ -128,7 +181,9 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
                 do_sample=False,
                 num_beams=3,
             )
-            generated_texts = self.processor.batch_decode(generated_ids, skip_special_tokens=False)
+            generated_texts = self.processor.batch_decode(
+                generated_ids, skip_special_tokens=False
+            )
             parsed_answer = self.processor.post_process_generation(
                 generated_texts[0],
                 task=self.task_prompt,
@@ -140,9 +195,9 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     def _get_detailed_caption_text(self, img_input: Image.Image) -> str:
         logger.info("Text prompt is empty. Getting detailed caption for the image...")
         task_prompt = "<DETAILED_CAPTION>"
-        inputs = self.processor(text=task_prompt, images=img_input, return_tensors="pt").to(
-            self.device, self.torch_dtype
-        )
+        inputs = self.processor(
+            text=task_prompt, images=img_input, return_tensors="pt"
+        ).to(self.device, self.torch_dtype)
         generated_ids = self.model.generate(
             input_ids=inputs["input_ids"],
             pixel_values=inputs["pixel_values"],
@@ -151,9 +206,13 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             do_sample=False,
             num_beams=3,
         )
-        generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[0]
+        generated_text = self.processor.batch_decode(
+            generated_ids, skip_special_tokens=False
+        )[0]
         parsed_answer = self.processor.post_process_generation(
-            generated_text, task=task_prompt, image_size=(img_input.width, img_input.height)
+            generated_text,
+            task=task_prompt,
+            image_size=(img_input.width, img_input.height),
         )
         detailed_caption_text = parsed_answer[task_prompt]
         logger.info(f"Got detailed caption: {detailed_caption_text}")
@@ -290,7 +349,9 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         self.model_source = deploy_params.get("model_source")
         self.device = deploy_params.get("device")
         self.runtime = deploy_params.get("runtime", RuntimeType.PYTORCH)
-        self.model_precision = torch.float16 if torch.cuda.is_available() else torch.float32
+        self.model_precision = (
+            torch.float16 if torch.cuda.is_available() else torch.float32
+        )
         self._hardware = get_hardware_info(self.device)
         self.load_model(**deploy_params)
         self._model_served = True
@@ -319,25 +380,10 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         label = sly.Label(geometry, obj_class, tags)
         return label
 
-    def get_info(self) -> Dict[str, Any]:
-        return {
-            "app_name": get_name_from_env(default="Neural Network Serving"),
-            "session_id": self.task_id,
-            "task_type": "Prompt-based object detection",
-            "sliding_window_support": self.sliding_window_mode,
-            "batch_inference_support": self.is_batch_inference_supported(),
-        }
-
     def set_project_meta(self, inference):
         """The model does not have predefined classes.
         In case of prompt-based models, the classes are defined by the user."""
         self.gui._model_classes_widget_container.hide()
-        return
-
-    def set_inference_settings(self, inference):
-        """The model does not have predefined inference settings.
-        In case of prompt-based models, the settings are defined by the user."""
-        self.gui._model_inference_settings_container.hide()
         return
 
     def _get_resized_dimensions(self, orig_size: Tuple[int, int]) -> Tuple[int, int]:

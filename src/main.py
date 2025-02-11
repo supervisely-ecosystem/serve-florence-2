@@ -7,7 +7,7 @@ from src.florence2 import Florence2
 
 if sly.is_development():
     load_dotenv("local.env")
-    load_dotenv(os.path.expanduser("~/supervisely.env"))
+    load_dotenv("supervisely.env")
 
 model = Florence2(
     use_gui=True,
