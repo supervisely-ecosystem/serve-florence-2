@@ -1,3 +1,2 @@
 task_prompt: "<CAPTION_TO_PHRASE_GROUNDING>"
 text: "find all objects"
-batch_size: 2
