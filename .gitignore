@@ -21,3 +21,5 @@ Thumbs.db
 *.pyo
 
 /app_data
+
+supervisely.env
