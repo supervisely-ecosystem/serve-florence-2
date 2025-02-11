@@ -95,33 +95,47 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     def predict_batch(self, images_np, settings):
         self.task_prompt = settings.get("task_prompt", self.default_task_prompt)
         text = settings.get("text", "find all objects")
+        mapping = settings.get("mapping")
 
         images = [Image.fromarray(img) for img in images_np]
-        prompt = [self.task_prompt + text] * len(images)
 
-        inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(
-            self.device, self.torch_dtype
-        )
-        generated_ids = self.model.generate(
-            input_ids=inputs["input_ids"],
-            pixel_values=inputs["pixel_values"],
-            max_new_tokens=1024,
-            early_stopping=False,
-            do_sample=False,
-            num_beams=3,
-        )
-        generated_texts = self.processor.batch_decode(generated_ids, skip_special_tokens=False)
-        parsed_answers = [
-            self.processor.post_process_generation(
-                text, task=self.task_prompt, image_size=(img.width, img.height)
+        if mapping is None and text is not None:
+            prompt = [self.task_prompt + text] * len(images)
+
+            inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(
+                self.device, self.torch_dtype
             )
-            for text, img in zip(generated_texts, images)
-        ]
+            generated_ids = self.model.generate(
+                input_ids=inputs["input_ids"],
+                pixel_values=inputs["pixel_values"],
+                max_new_tokens=1024,
+                early_stopping=False,
+                do_sample=False,
+                num_beams=3,
+            )
+            generated_texts = self.processor.batch_decode(generated_ids, skip_special_tokens=False)
+            parsed_answers = [
+                self.processor.post_process_generation(
+                    text, task=self.task_prompt, image_size=(img.width, img.height)
+                )
+                for text, img in zip(generated_texts, images)
+            ]
 
-        batch_predictions = []
-        for answer in parsed_answers:
-            predictions = self._format_predictions_cp(answer, size_scaler=None)
-            batch_predictions.append(predictions)
+            batch_predictions = []
+            for answer in parsed_answers:
+                predictions = self._format_predictions_cp(answer, size_scaler=None)
+                batch_predictions.append(predictions)
+
+        elif mapping is not None and text is None:
+            batch_predictions = []
+            for image in images:
+                predictions_mapping = self._classes_mapping_inference(image, mapping)
+                predictions = self._format_predictions_cm(predictions_mapping, size_scaler=None)
+                batch_predictions.append(predictions)
+
+        else:
+            raise ValueError("Either 'mapping' or 'text' should be provided")
+
         return batch_predictions
 
     def _common_prompt_inference(self, img_input: Image.Image, text: str):
