@@ -99,8 +99,11 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
 
         images = [Image.fromarray(img) for img in images_np]
 
-        if mapping is None and text is not None:
-            prompt = [self.task_prompt + text] * len(images)
+        if mapping is None:
+            if self.task_prompt == "<CAPTION_TO_PHRASE_GROUNDING>":
+                prompt = [self.task_prompt + text] * len(images)
+            elif self.task_prompt in ["<OD>", "<DENSE_REGION_CAPTION>", "<REGION_PROPOSAL>"]:
+                prompt = [self.task_prompt] * len(images)
 
             inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(
                 self.device, self.torch_dtype
@@ -132,9 +135,6 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
                 predictions_mapping = self._classes_mapping_inference(image, mapping)
                 predictions = self._format_predictions_cm(predictions_mapping, size_scaler=None)
                 batch_predictions.append(predictions)
-
-        else:
-            raise ValueError("Either 'mapping' or 'text' should be provided")
 
         return batch_predictions
 
@@ -274,9 +274,12 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
                 )
             else:
                 x1, y1, x2, y2 = round(x1), round(y1), round(x2), round(y2)
-            bbox_yxyx = [y1, x1, y2, x2]
-            pred_box = PredictionBBox(class_name, bbox_yxyx, None)
-            postprocessed_preds.append(pred_box)
+            if not y1 > y2 and not x1 > x2:
+                bbox_yxyx = [y1, x1, y2, x2]
+                if not class_name:
+                    class_name = "object"
+                pred_box = PredictionBBox(class_name, bbox_yxyx, None)
+                postprocessed_preds.append(pred_box)
         return postprocessed_preds
 
     def _download_pretrained_model(self, model_files: dict):

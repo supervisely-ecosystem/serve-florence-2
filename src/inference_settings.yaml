@@ -1,2 +1,4 @@
+# <CAPTION_TO_PHRASE_GROUNDING>, <OD>, <DENSE_REGION_CAPTION> or <REGION_PROPOSAL>
 task_prompt: "<CAPTION_TO_PHRASE_GROUNDING>"
+# text is needed only is task prompt is "<CAPTION_TO_PHRASE_GROUNDING>"
 text: "find all objects"
