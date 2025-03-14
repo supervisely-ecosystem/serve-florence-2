@@ -93,36 +93,33 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         return predictions
 
     def predict_batch(self, images_np, settings):
-        self.task_prompt = settings.get("task_prompt", self.default_task_prompt)
+        task_prompt = settings.get("task_prompt", self.default_task_prompt)
+        if task_prompt in [
+            "<CAPTION>+<CAPTION_TO_PHRASE_GROUNDING>",
+            "<DETAILED_CAPTION>+<CAPTION_TO_PHRASE_GROUNDING>",
+            "<MORE_DETAILED_CAPTION>+<CAPTION_TO_PHRASE_GROUNDING>",
+        ]:
+            self.task_prompt = "<CAPTION_TO_PHRASE_GROUNDING>"
+            cascaded_task = True
+        else:
+            self.task_prompt = task_prompt
+            cascaded_task = False
+
         text = settings.get("text", "find all objects")
         mapping = settings.get("mapping")
 
         images = [Image.fromarray(img) for img in images_np]
 
         if mapping is None:
-            if self.task_prompt == "<CAPTION_TO_PHRASE_GROUNDING>":
-                prompt = [self.task_prompt + text] * len(images)
-            elif self.task_prompt in ["<OD>", "<DENSE_REGION_CAPTION>", "<REGION_PROPOSAL>"]:
-                prompt = [self.task_prompt] * len(images)
-
-            inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(
-                self.device, self.torch_dtype
-            )
-            generated_ids = self.model.generate(
-                input_ids=inputs["input_ids"],
-                pixel_values=inputs["pixel_values"],
-                max_new_tokens=1024,
-                early_stopping=False,
-                do_sample=False,
-                num_beams=3,
-            )
-            generated_texts = self.processor.batch_decode(generated_ids, skip_special_tokens=False)
-            parsed_answers = [
-                self.processor.post_process_generation(
-                    text, task=self.task_prompt, image_size=(img.width, img.height)
+            if cascaded_task:
+                caption_prompt = task_prompt.split("+")[0]
+                texts = self.batch_inference(images, caption_prompt)
+                texts = [txt[caption_prompt] for txt in texts]
+                parsed_answers = self.batch_inference(
+                    images, "<CAPTION_TO_PHRASE_GROUNDING>", texts
                 )
-                for text, img in zip(generated_texts, images)
-            ]
+            else:
+                parsed_answers = self.batch_inference(images, self.task_prompt, text)
 
             batch_predictions = []
             for answer in parsed_answers:
@@ -137,6 +134,35 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
                 batch_predictions.append(predictions)
 
         return batch_predictions
+
+    def batch_inference(self, images, task_prompt, text=None):
+        if task_prompt == "<CAPTION_TO_PHRASE_GROUNDING>":
+            if isinstance(text, str):
+                prompt = [task_prompt + text] * len(images)
+            elif isinstance(text, list):
+                prompt = [task_prompt + txt for txt in text]
+        else:
+            prompt = [task_prompt] * len(images)
+
+        inputs = self.processor(text=prompt, images=images, return_tensors="pt").to(
+            self.device, self.torch_dtype
+        )
+        generated_ids = self.model.generate(
+            input_ids=inputs["input_ids"],
+            pixel_values=inputs["pixel_values"],
+            max_new_tokens=1024,
+            early_stopping=False,
+            do_sample=False,
+            num_beams=3,
+        )
+        generated_texts = self.processor.batch_decode(generated_ids, skip_special_tokens=False)
+        parsed_answers = [
+            self.processor.post_process_generation(
+                text, task=task_prompt, image_size=(img.width, img.height)
+            )
+            for text, img in zip(generated_texts, images)
+        ]
+        return parsed_answers
 
     def _common_prompt_inference(self, img_input: Image.Image, text: str):
         if text == "":
