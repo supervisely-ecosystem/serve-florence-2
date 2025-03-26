@@ -3,11 +3,12 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import supervisely as sly
+import supervisely.nn.inference.gui as GUI
 import torch
 import torchvision.transforms as T
 from huggingface_hub import list_repo_tree, snapshot_download
 from PIL import Image
-from supervisely.app.widgets import Checkbox, Field
+from supervisely.app.widgets import Checkbox, Field, Widget
 from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType
 from supervisely.nn.inference.inference import (
     get_hardware_info,
@@ -18,46 +19,38 @@ from supervisely.nn.prediction_dto import PredictionBBox
 from transformers import AutoModelForCausalLM, AutoProcessor
 
 
+class Florence2GUI(GUI.ServingGUITemplate):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.on_serve_callbacks = [self.on_serve_with_checkbox_check]
+
+    def on_serve_with_checkbox_check(self):
+        if hasattr(self, "update_pretrained_checkbox"):
+            self.update_pretrained = self.update_pretrained_checkbox.is_checked()
+            logger.debug(f"On Serve Callback - Update pretrained model: {self.update_pretrained}")
+
+    def _initialize_extra_widgets(self) -> List[Widget]:
+        self.update_pretrained_checkbox = Checkbox("Update pretrained model", False)
+        update_pretrained_field = Field(
+            self.update_pretrained_checkbox,
+            "Update Model",
+            "If checked, the model will be downloaded from HuggingFace even if it exists in cache",
+        )
+        return [update_pretrained_field]
+
+
 class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     FRAMEWORK_NAME = "Florence 2"
     MODELS = "src/models.json"
     APP_OPTIONS = "src/app_options.yaml"
     INFERENCE_SETTINGS = "src/inference_settings.yaml"
 
+    GUI.ServingGUITemplate = Florence2GUI
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        def initialize_extra_widgets(gui_instance):
-            gui_instance.update_pretrained_checkbox = Checkbox("Update pretrained model", False)
-            update_pretrained_field = Field(
-                gui_instance.update_pretrained_checkbox,
-                "Update Model",
-                "If checked, the model will be downloaded from HuggingFace even if it exists in cache",
-            )
-            return [update_pretrained_field]
-
-        self._gui._initialize_extra_widgets = lambda: initialize_extra_widgets(self._gui)
-        base_widgets = self._gui._initialize_layout()
-        extra_widgets = self._gui._initialize_extra_widgets()
-        self._gui.widgets = base_widgets + extra_widgets
-        self._gui.card = self._gui._get_card()
-        self._user_layout = self._gui.widgets
-        self._user_layout_card = self._gui.card
-
         self.update_pretrained = False
-        if hasattr(self._gui, "update_pretrained_checkbox"):
-            self.update_pretrained = self._gui.update_pretrained_checkbox.is_checked()
-
-        original_on_serve_callbacks = self.gui.on_serve_callbacks.copy()
-        self.gui.on_serve_callbacks = []
-
-        def on_serve_with_checkbox_check(gui):
-            if hasattr(gui, "update_pretrained_checkbox"):
-                self.update_pretrained = gui.update_pretrained_checkbox.is_checked()
-                logger.debug(f"On Serve Callback - Update pretrained model: {self.update_pretrained}")
-
-        self.gui.on_serve_callbacks.append(on_serve_with_checkbox_check)
-        self.gui.on_serve_callbacks.extend(original_on_serve_callbacks)
 
         # disable GUI widgets
         self.gui.set_project_meta = self.set_project_meta
