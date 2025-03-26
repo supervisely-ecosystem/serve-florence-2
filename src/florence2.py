@@ -36,7 +36,7 @@ class Florence2GUI(GUI.ServingGUITemplate):
         update_pretrained_field = Field(
             self.update_pretrained_checkbox,
             "Update Model",
-            "If checked, the model will be downloaded from HuggingFace even if it exists in cache",
+            "If checked, the model will be updated from HuggingFace",
         )
         return [update_pretrained_field]
 
