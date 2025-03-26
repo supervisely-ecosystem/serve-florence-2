@@ -23,11 +23,13 @@ class Florence2GUI(GUI.ServingGUITemplate):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.on_serve_callbacks = [self.on_serve_with_checkbox_check]
+        self.update_pretrained = False
 
-    def on_serve_with_checkbox_check(self):
-        if hasattr(self, "update_pretrained_checkbox"):
-            self.update_pretrained = self.update_pretrained_checkbox.is_checked()
-            logger.debug(f"On Serve Callback - Update pretrained model: {self.update_pretrained}")
+    @staticmethod
+    def on_serve_with_checkbox_check(gui: "Florence2GUI"):
+        if hasattr(gui, "update_pretrained_checkbox"):
+            gui.update_pretrained = gui.update_pretrained_checkbox.is_checked()
+            logger.debug(f"On Serve Callback - Update pretrained model: {gui.update_pretrained}")
 
     def _initialize_extra_widgets(self) -> List[Widget]:
         self.update_pretrained_checkbox = Checkbox("Update pretrained model", False)
@@ -49,8 +51,6 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        self.update_pretrained = False
 
         # disable GUI widgets
         self.gui.set_project_meta = self.set_project_meta
@@ -349,7 +349,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         repo_id = model_files["checkpoint"]
         model_name = repo_id.split("/")[1]
         local_model_path = f"{self.weights_cache_dir}/{model_name}"
-        if self.update_pretrained:
+        if self.gui.update_pretrained:
             logger.debug(f"Downloading {repo_id} to {local_model_path}...")
             files_info = list_repo_tree(repo_id)
             total_size = sum([file.size for file in files_info])
