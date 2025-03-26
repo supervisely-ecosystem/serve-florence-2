@@ -7,6 +7,7 @@ import torch
 import torchvision.transforms as T
 from huggingface_hub import list_repo_tree, snapshot_download
 from PIL import Image
+from supervisely.app.widgets import Checkbox, Field
 from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType
 from supervisely.nn.inference.inference import (
     get_hardware_info,
@@ -25,6 +26,36 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        def initialize_extra_widgets(gui_instance):
+            gui_instance.update_pretrained_checkbox = Checkbox("Update pretrained model", False)
+            update_pretrained_field = Field(
+                gui_instance.update_pretrained_checkbox,
+                "Update Model",
+                "If checked, the model will be downloaded from HuggingFace even if it exists in cache",
+            )
+            return [update_pretrained_field]
+
+        self._gui._initialize_extra_widgets = lambda: initialize_extra_widgets(self._gui)
+        base_widgets = self._gui._initialize_layout()
+        extra_widgets = self._gui._initialize_extra_widgets()
+        self._gui.widgets = base_widgets + extra_widgets
+        self._gui.card = self._gui._get_card()
+
+        self.update_pretrained = False
+        if hasattr(self._gui, "update_pretrained_checkbox"):
+            self.update_pretrained = self._gui.update_pretrained_checkbox.is_checked()
+
+        original_on_serve_callbacks = self.gui.on_serve_callbacks.copy()
+        self.gui.on_serve_callbacks = []
+
+        def on_serve_with_checkbox_check(gui):
+            if hasattr(gui, "update_pretrained_checkbox"):
+                self.update_pretrained = gui.update_pretrained_checkbox.is_checked()
+                logger.debug(f"Update pretrained model: {self.update_pretrained}")
+
+        self.gui.on_serve_callbacks.append(on_serve_with_checkbox_check)
+        self.gui.on_serve_callbacks.extend(original_on_serve_callbacks)
 
         # disable GUI widgets
         self.gui.set_project_meta = self.set_project_meta
@@ -323,19 +354,20 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         repo_id = model_files["checkpoint"]
         model_name = repo_id.split("/")[1]
         local_model_path = f"{self.weights_cache_dir}/{model_name}"
-        logger.debug(f"Downloading {repo_id} to {local_model_path}...")
-        files_info = list_repo_tree(repo_id)
-        total_size = sum([file.size for file in files_info])
-        with self.gui._download_progress(
-            message=f"Updating: '{model_name}'",
-            total=total_size,
-            unit="bytes",
-            unit_scale=True,
-        ) as download_pbar:
-            self.gui.download_progress.show()
-            snapshot_download(repo_id=repo_id, local_dir=local_model_path)
-            download_pbar.update(total_size)
-            # TODO update progress widget to use async_tqdm
+        if self.update_pretrained:
+            logger.debug(f"Downloading {repo_id} to {local_model_path}...")
+            files_info = list_repo_tree(repo_id)
+            total_size = sum([file.size for file in files_info])
+            with self.gui._download_progress(
+                message=f"Updating: '{model_name}'",
+                total=total_size,
+                unit="bytes",
+                unit_scale=True,
+            ) as download_pbar:
+                self.gui.download_progress.show()
+                snapshot_download(repo_id=repo_id, local_dir=local_model_path)
+                download_pbar.update(total_size)
+                # TODO update progress widget to use async_tqdm
         return {"checkpoint": local_model_path}
 
     def _load_model_headless(

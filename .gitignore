@@ -23,3 +23,5 @@ Thumbs.db
 /app_data
 
 supervisely.env
+
+.venv
