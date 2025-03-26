@@ -41,6 +41,8 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         extra_widgets = self._gui._initialize_extra_widgets()
         self._gui.widgets = base_widgets + extra_widgets
         self._gui.card = self._gui._get_card()
+        self._user_layout = self._gui.widgets
+        self._user_layout_card = self._gui.card
 
         self.update_pretrained = False
         if hasattr(self._gui, "update_pretrained_checkbox"):
@@ -52,7 +54,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         def on_serve_with_checkbox_check(gui):
             if hasattr(gui, "update_pretrained_checkbox"):
                 self.update_pretrained = gui.update_pretrained_checkbox.is_checked()
-                logger.debug(f"Update pretrained model: {self.update_pretrained}")
+                logger.debug(f"On Serve Callback - Update pretrained model: {self.update_pretrained}")
 
         self.gui.on_serve_callbacks.append(on_serve_with_checkbox_check)
         self.gui.on_serve_callbacks.extend(original_on_serve_callbacks)
