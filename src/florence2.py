@@ -3,10 +3,12 @@ from typing import Any, Dict, List, Tuple
 
 import numpy as np
 import supervisely as sly
+import supervisely.nn.inference.gui as GUI
 import torch
 import torchvision.transforms as T
 from huggingface_hub import list_repo_tree, snapshot_download
 from PIL import Image
+from supervisely.app.widgets import Checkbox, Field, Widget
 from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType
 from supervisely.nn.inference.inference import (
     get_hardware_info,
@@ -17,11 +19,35 @@ from supervisely.nn.prediction_dto import PredictionBBox
 from transformers import AutoModelForCausalLM, AutoProcessor
 
 
+class Florence2GUI(GUI.ServingGUITemplate):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.on_serve_callbacks = [self.on_serve_with_checkbox_check]
+        self.update_pretrained = False
+
+    @staticmethod
+    def on_serve_with_checkbox_check(gui: "Florence2GUI"):
+        if hasattr(gui, "update_pretrained_checkbox"):
+            gui.update_pretrained = gui.update_pretrained_checkbox.is_checked()
+            logger.debug(f"On Serve Callback - Update pretrained model: {gui.update_pretrained}")
+
+    def _initialize_extra_widgets(self) -> List[Widget]:
+        self.update_pretrained_checkbox = Checkbox("Update pretrained model", False)
+        update_pretrained_field = Field(
+            self.update_pretrained_checkbox,
+            "Update Model",
+            "If checked, the model will be updated from HuggingFace",
+        )
+        return [update_pretrained_field]
+
+
 class Florence2(sly.nn.inference.PromptBasedObjectDetection):
     FRAMEWORK_NAME = "Florence 2"
     MODELS = "src/models.json"
     APP_OPTIONS = "src/app_options.yaml"
     INFERENCE_SETTINGS = "src/inference_settings.yaml"
+
+    GUI.ServingGUITemplate = Florence2GUI
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -323,19 +349,20 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         repo_id = model_files["checkpoint"]
         model_name = repo_id.split("/")[1]
         local_model_path = f"{self.weights_cache_dir}/{model_name}"
-        logger.debug(f"Downloading {repo_id} to {local_model_path}...")
-        files_info = list_repo_tree(repo_id)
-        total_size = sum([file.size for file in files_info])
-        with self.gui._download_progress(
-            message=f"Updating: '{model_name}'",
-            total=total_size,
-            unit="bytes",
-            unit_scale=True,
-        ) as download_pbar:
-            self.gui.download_progress.show()
-            snapshot_download(repo_id=repo_id, local_dir=local_model_path)
-            download_pbar.update(total_size)
-            # TODO update progress widget to use async_tqdm
+        if self.gui.update_pretrained:
+            logger.debug(f"Downloading {repo_id} to {local_model_path}...")
+            files_info = list_repo_tree(repo_id)
+            total_size = sum([file.size for file in files_info])
+            with self.gui._download_progress(
+                message=f"Updating: '{model_name}'",
+                total=total_size,
+                unit="bytes",
+                unit_scale=True,
+            ) as download_pbar:
+                self.gui.download_progress.show()
+                snapshot_download(repo_id=repo_id, local_dir=local_model_path)
+                download_pbar.update(total_size)
+                # TODO update progress widget to use async_tqdm
         return {"checkpoint": local_model_path}
 
     def _load_model_headless(
