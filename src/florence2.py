@@ -17,6 +17,9 @@ from supervisely.nn.inference.inference import (
 )
 from supervisely.nn.prediction_dto import PredictionBBox
 from transformers import AutoModelForCausalLM, AutoProcessor
+from fastapi import Request
+import base64
+from io import BytesIO
 
 
 class Florence2GUI(GUI.ServingGUITemplate):
@@ -456,3 +459,58 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             new_height = 24
             new_width = int(24 * width / height)
         return (new_width, new_height)
+
+    def serve(self):
+        super().serve()
+        server = self._app.get_server()
+
+        @server.post("/visual_question_answering")
+        def visual_question_answering(request: Request):
+            api = request.state.api
+            state = request.state.state
+            if "image_id" in state:
+                image_id = state["image_id"]
+                image_np = api.image.download_np(image_id)
+                image_pil = Image.fromarray(image_np)
+            elif "image_path" in state:
+                image_pil = Image.open(state["image_path"])
+            elif "image_encoding" in state:
+                image_data = base64.b64decode(state["image_encoding"])
+                image_pil = Image.open(BytesIO(image_data))
+            else:
+                raise ValueError(
+                    "Request must contain either image_id, image_path or image_encoding!"
+                )
+
+            text_prompt = state["text_prompt"]
+
+            inputs = self.processor(text=text_prompt, images=image_pil, return_tensors="pt").to(
+                self.device, self.torch_dtype
+            )
+            generated_ids = self.model.generate(
+                input_ids=inputs["input_ids"],
+                pixel_values=inputs["pixel_values"],
+                max_new_tokens=1024,
+                early_stopping=False,
+                do_sample=False,
+                num_beams=3,
+            )
+            generated_text = self.processor.batch_decode(generated_ids, skip_special_tokens=False)[
+                0
+            ]
+            parsed_answer = self.processor.post_process_generation(
+                generated_text,
+                task=text_prompt,
+                image_size=(image_pil.width, image_pil.height),
+            )
+            answer = parsed_answer[text_prompt]
+
+            return {"answer": answer}
+
+        @server.post("/get_prompt_instructions")
+        def get_prompt_instructions(request: Request):
+            instructions = (
+                "Possible prompts for Florence 2 image-to-text inference: '<CAPTION>', '<DETAILED_CAPTION>' and "
+                "'<MORE_DETAILED_CAPTION>'. Input prompt affects granularity of generated image description."
+            )
+            return {"instructions": instructions}
