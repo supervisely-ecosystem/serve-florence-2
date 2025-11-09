@@ -45,7 +45,7 @@ class Florence2GUI(GUI.ServingGUITemplate):
 
 
 class Florence2(sly.nn.inference.PromptBasedObjectDetection):
-    FRAMEWORK_NAME = "Florence 2"
+    FRAMEWORK_NAME = "Florence-2"
     MODELS = "src/models.json"
     APP_OPTIONS = "src/app_options.yaml"
     INFERENCE_SETTINGS = "src/inference_settings.yaml"

@@ -3,7 +3,7 @@
 	"type": "app",
 	"version": "2.0.0",
 	"description": "Deploy Florence-2 as a REST API service",
-	"categories": ["neural network", "images", "object detection", "serve"],
+	"categories": ["neural network", "images", "object detection", "serve",  "framework:Florence-2"],
 	"icon": "https://github.com/user-attachments/assets/7274dc44-063f-4bf8-966d-ec4e1978651f",
 	"icon_cover": true,
 	"poster": "https://github.com/user-attachments/assets/79b71648-f78e-4ae3-be3f-508e385fc0b4",
