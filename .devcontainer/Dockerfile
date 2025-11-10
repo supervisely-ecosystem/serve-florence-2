@@ -16,7 +16,7 @@ RUN apt-get update
 RUN apt-get install ffmpeg libgeos-dev libsm6 libxext6 libexiv2-dev libxrender-dev libboost-all-dev -y
 RUN pip install opencv-python
 
-RUN python3 -m pip install supervisely==6.73.251
+RUN python3 -m pip install supervisely==6.73.457
 
 RUN pip3 install matplotlib
 RUN pip3 install ipywidgets

@@ -337,7 +337,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
                 postprocessed_preds.append(pred_box)
         return postprocessed_preds
 
-    def _download_pretrained_model(self, model_files: dict):
+    def _download_pretrained_model(self, model_files: dict, log_progress=True, headless=False):
         """
         Diff to :class:`Inference`:
            - The model is downloaded from the Hugging Face
@@ -352,7 +352,8 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         repo_id = model_files["checkpoint"]
         model_name = repo_id.split("/")[1]
         local_model_path = f"{self.weights_cache_dir}/{model_name}"
-        if self.gui.update_pretrained:
+
+        if not os.path.exists(local_model_path):
             logger.debug(f"Downloading {repo_id} to {local_model_path}...")
             files_info = list_repo_tree(repo_id)
             total_size = sum([file.size for file in files_info])
