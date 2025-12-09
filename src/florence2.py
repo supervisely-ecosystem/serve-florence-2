@@ -1,6 +1,5 @@
 import os
-from typing import Any, Dict, List, Tuple
-
+from typing import List, Optional, Tuple, Union
 import numpy as np
 import supervisely as sly
 import supervisely.nn.inference.gui as GUI
@@ -9,7 +8,7 @@ import torchvision.transforms as T
 from huggingface_hub import list_repo_tree, snapshot_download
 from PIL import Image
 from supervisely.app.widgets import Checkbox, Field, Widget
-from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType
+from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType, ModelPrecision
 from supervisely.nn.inference.inference import (
     get_hardware_info,
     get_name_from_env,
@@ -20,6 +19,9 @@ from transformers import AutoModelForCausalLM, AutoProcessor
 from fastapi import Request
 import base64
 from io import BytesIO
+from supervisely.annotation.label import LabelingStatus
+from supervisely.nn.prediction_dto import Prediction as PredictionDTO
+import supervisely.imaging.image as sly_image
 
 
 class Florence2GUI(GUI.ServingGUITemplate):
@@ -91,6 +93,8 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             ).eval()
             self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
             self.model = self.model.to(device)
+
+        self.classes = ["object"]
 
     def predict(self, image_path: np.ndarray, settings: dict = None):
         if self.runtime == RuntimeType.PYTORCH:
@@ -353,7 +357,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         model_name = repo_id.split("/")[1]
         local_model_path = f"{self.weights_cache_dir}/{model_name}"
 
-        if not os.path.exists(local_model_path):
+        if self.gui.update_pretrained or not os.path.exists(local_model_path):
             logger.debug(f"Downloading {repo_id} to {local_model_path}...")
             files_info = list_repo_tree(repo_id)
             total_size = sum([file.size for file in files_info])
@@ -403,7 +407,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         self.model_source = deploy_params.get("model_source")
         self.device = deploy_params.get("device")
         self.runtime = deploy_params.get("runtime", RuntimeType.PYTORCH)
-        self.model_precision = torch.float16 if torch.cuda.is_available() else torch.float32
+        self.model_precision = ModelPrecision.FP16
         self._hardware = get_hardware_info(self.device)
         self.load_model(**deploy_params)
         self._model_served = True
@@ -460,6 +464,36 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             new_height = 24
             new_width = int(24 * width / height)
         return (new_width, new_height)
+
+    def _predictions_to_annotation(
+        self,
+        image_path: Union[str, np.ndarray],
+        predictions: List[PredictionDTO],
+        classes_whitelist: Optional[List[str]] = None,
+    ) -> sly.Annotation:
+        labels = []
+        for prediction in predictions:
+            label = self._create_label(prediction)
+            if label is None:
+                # for example empty mask
+                continue
+            if isinstance(label, list):
+                for lb in label:
+                    lb.status = LabelingStatus.AUTO
+                labels.extend(label)
+                continue
+
+            label.status = LabelingStatus.AUTO
+            labels.append(label)
+
+        # create annotation with correct image resolution
+        if isinstance(image_path, str):
+            img = sly_image.read(image_path)
+            img_size = img.shape[:2]
+        else:
+            img_size = image_path.shape[:2]
+        ann = sly.Annotation(img_size, labels)
+        return ann
 
     def serve(self):
         super().serve()
