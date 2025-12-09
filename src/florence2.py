@@ -9,7 +9,7 @@ import torchvision.transforms as T
 from huggingface_hub import list_repo_tree, snapshot_download
 from PIL import Image
 from supervisely.app.widgets import Checkbox, Field, Widget
-from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType
+from supervisely.nn.inference import CheckpointInfo, ModelSource, RuntimeType, ModelPrecision
 from supervisely.nn.inference.inference import (
     get_hardware_info,
     get_name_from_env,
@@ -353,7 +353,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         model_name = repo_id.split("/")[1]
         local_model_path = f"{self.weights_cache_dir}/{model_name}"
 
-        if not os.path.exists(local_model_path):
+        if self.gui.update_pretrained or not os.path.exists(local_model_path):
             logger.debug(f"Downloading {repo_id} to {local_model_path}...")
             files_info = list_repo_tree(repo_id)
             total_size = sum([file.size for file in files_info])
@@ -403,7 +403,7 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
         self.model_source = deploy_params.get("model_source")
         self.device = deploy_params.get("device")
         self.runtime = deploy_params.get("runtime", RuntimeType.PYTORCH)
-        self.model_precision = torch.float16 if torch.cuda.is_available() else torch.float32
+        self.model_precision = ModelPrecision.FP16
         self._hardware = get_hardware_info(self.device)
         self.load_model(**deploy_params)
         self._model_served = True
