@@ -1,6 +1,5 @@
 import os
-from typing import Any, Dict, List, Tuple
-
+from typing import List, Optional, Tuple, Union
 import numpy as np
 import supervisely as sly
 import supervisely.nn.inference.gui as GUI
@@ -20,6 +19,9 @@ from transformers import AutoModelForCausalLM, AutoProcessor
 from fastapi import Request
 import base64
 from io import BytesIO
+from supervisely.annotation.label import LabelingStatus
+from supervisely.nn.prediction_dto import Prediction as PredictionDTO
+import supervisely.imaging.image as sly_image
 
 
 class Florence2GUI(GUI.ServingGUITemplate):
@@ -462,6 +464,36 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             new_height = 24
             new_width = int(24 * width / height)
         return (new_width, new_height)
+
+    def _predictions_to_annotation(
+        self,
+        image_path: Union[str, np.ndarray],
+        predictions: List[PredictionDTO],
+        classes_whitelist: Optional[List[str]] = None,
+    ) -> sly.Annotation:
+        labels = []
+        for prediction in predictions:
+            label = self._create_label(prediction)
+            if label is None:
+                # for example empty mask
+                continue
+            if isinstance(label, list):
+                for lb in label:
+                    lb.status = LabelingStatus.AUTO
+                labels.extend(label)
+                continue
+
+            label.status = LabelingStatus.AUTO
+            labels.append(label)
+
+        # create annotation with correct image resolution
+        if isinstance(image_path, str):
+            img = sly_image.read(image_path)
+            img_size = img.shape[:2]
+        else:
+            img_size = image_path.shape[:2]
+        ann = sly.Annotation(img_size, labels)
+        return ann
 
     def serve(self):
         super().serve()
