@@ -92,6 +92,8 @@ class Florence2(sly.nn.inference.PromptBasedObjectDetection):
             self.processor = AutoProcessor.from_pretrained(model_path, trust_remote_code=True)
             self.model = self.model.to(device)
 
+        self.classes = ["object"]
+
     def predict(self, image_path: np.ndarray, settings: dict = None):
         if self.runtime == RuntimeType.PYTORCH:
             return self._predict_pytorch(image_path, settings)
