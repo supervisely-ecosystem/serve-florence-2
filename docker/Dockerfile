@@ -16,4 +16,4 @@ COPY models.json /app/models.json
 WORKDIR /app
 RUN python3 download_weights.py
 
-LABEL python_sdk_version=6.73.457
+LABEL python_sdk_version="6.73.486"

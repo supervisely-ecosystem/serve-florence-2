@@ -1,30 +1,39 @@
 {
-	"name": "Serve Florence-2",
-	"type": "app",
-	"version": "2.0.0",
-	"description": "Deploy Florence-2 as a REST API service",
-	"categories": ["neural network", "images", "object detection", "serve",  "framework:Florence-2"],
-	"icon": "https://github.com/user-attachments/assets/7274dc44-063f-4bf8-966d-ec4e1978651f",
-	"icon_cover": true,
-	"poster": "https://github.com/user-attachments/assets/79b71648-f78e-4ae3-be3f-508e385fc0b4",
-	"gpu": "required",
-	"session_tags": ["deployed_florence_2", "deployed_nn"],
-	"community_agent": false,
-	"docker_image": "supervisely/florence-2:1.0.2",
-	"instance_version": "6.15.2",
-	"entrypoint": "python3 -m uvicorn main:model.app --host 0.0.0.0 --port 8000 --ws websockets --app-dir src",
-	"port": 8000,
-	"task_location": "application_sessions",
-	"license": {
-		"type": "MIT"
-	},
-	"modal_template_state": {
-		"autostart": true
-	},
-	"access_restriction": [
-		{
-			"instance": "community_free",
-			"message": "The best interactive models for AI-assisted segmentation are already deployed in the Supervisely Cloud and are available for auto-labeling to all platform users. The number of API calls and the ability to run this app on your own agent (GPU) are limited for Free accounts. To increase usage limits or run the app on your GPU, switch to the <a href=\"/billing\">Pro</a> plan or request the <a href=\"https://supervisely.com/contact-us/\" target=\"_blank\">Enterprise</a> Edition."
-		}
-	]
+    "name": "Serve Florence-2",
+    "type": "app",
+    "version": "2.0.0",
+    "description": "Deploy Florence-2 as a REST API service",
+    "categories": [
+        "neural network",
+        "images",
+        "object detection",
+        "serve",
+        "framework:Florence-2"
+    ],
+    "icon": "https://github.com/user-attachments/assets/7274dc44-063f-4bf8-966d-ec4e1978651f",
+    "icon_cover": true,
+    "poster": "https://github.com/user-attachments/assets/79b71648-f78e-4ae3-be3f-508e385fc0b4",
+    "gpu": "required",
+    "session_tags": [
+        "deployed_florence_2",
+        "deployed_nn"
+    ],
+    "community_agent": false,
+    "docker_image": "supervisely/florence-2:1.0.3",
+    "instance_version": "6.15.35",
+    "entrypoint": "python3 -m uvicorn main:model.app --host 0.0.0.0 --port 8000 --ws websockets --app-dir src",
+    "port": 8000,
+    "task_location": "application_sessions",
+    "license": {
+        "type": "MIT"
+    },
+    "modal_template_state": {
+        "autostart": true
+    },
+    "access_restriction": [
+        {
+            "instance": "community_free",
+            "message": "The best interactive models for AI-assisted segmentation are already deployed in the Supervisely Cloud and are available for auto-labeling to all platform users. The number of API calls and the ability to run this app on your own agent (GPU) are limited for Free accounts. To increase usage limits or run the app on your GPU, switch to the <a href=\"/billing\">Pro</a> plan or request the <a href=\"https://supervisely.com/contact-us/\" target=\"_blank\">Enterprise</a> Edition."
+        }
+    ]
 }
