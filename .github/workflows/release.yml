@@ -13,6 +13,7 @@ jobs:
     with:
       image_name: "florence-2"
       runtime_base_image: "base-py-cuda-hardened"
+      tag_ref_name: "6.73.567"
       cve_checks: true
 
   Supervisely-Release:
