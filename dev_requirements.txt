@@ -1,8 +1,11 @@
-torch==2.3.1 --index-url https://download.pytorch.org/whl/cu121
-torchvision==0.18.1 --index-url https://download.pytorch.org/whl/cu121
+--extra-index-url https://download.pytorch.org/whl/cu128
+torch==2.10.0+cu128 ; platform_system == "Linux"
+torch==2.10.0 ; platform_system != "Linux"
+torchvision==0.25.0+cu128 ; platform_system == "Linux"
+torchvision==0.25.0 ; platform_system != "Linux"
 packaging==22.0
 transformers==4.46.2
-supervisely==6.73.486
+supervisely==6.73.571
 matplotlib
 ipywidgets
 timm
