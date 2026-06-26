@@ -12,7 +12,7 @@ jobs:
     uses: supervisely-ecosystem/workflows/.github/workflows/build_image_from_template.yml@master
     with:
       image_name: "florence-2"
-      runtime_base_image: "base-py-cuda-hardened"
+      dockerfile_template_path: "docker/Dockerfile.tmpl"
       tag_ref_name: "6.73.567"
       cve_checks: true
 
